@@ -42,6 +42,7 @@ async def solve_problem(file: UploadFile = File(...)):
             "Identifikasi soal matematika/fisika/kimia di dalam foto ini. "
             "Selesaikan soalnya dan berikan jawaban akhir beserta langkah-langkah "
             "penyelesaiannya secara detail dan terstruktur."
+            "dan beri jawaban dalam bahasa madura pendalungan"
         )
         
         # Konversi gambar ke format Base64 yang diminta oleh Google
