@@ -24,8 +24,29 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     print("⚠️ WARNING: GEMINI_API_KEY tidak ditemukan di environment variables atau file .env!")
 
+# --- TAMBAHKAN KODE INI SETELAH BARIS 24 (setelah pengecekan API_KEY) ---
+
+# Status awal aplikasi (bisa diakses)
+app_active = True
+
+# Endpoint untuk mengunci/membuka aplikasi
+@app.get("/admin/toggle")
+async def toggle_status(key: str):
+    global app_active
+    # Password rahasia yang nanti akan kamu tanam di kode Flutter
+    if key == "KUNCI_RAHASIA_123":
+        app_active = not app_active
+        status_text = "Aktif" if app_active else "Terkunci"
+        print(f"▶️ Status aplikasi diubah menjadi: {status_text}")
+        return {"status": status_text}
+    return {"error": "Akses Ditolak"}
+
+# ---------------------------------------------------------------------
+
 @app.post("/solve")
 async def solve_problem(file: UploadFile = File(...)):
+    if not app_active:
+        return {"status": "error", "answer": "MAJER JHEK GRATISEN MELOLOH!."}
     try:
         print("▶️ 1. Menerima foto dari HP...")
         image_bytes = await file.read()
