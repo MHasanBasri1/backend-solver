@@ -2,7 +2,8 @@ import io
 import os
 import base64
 import requests
-from fastapi import FastAPI, UploadFile, File, HTTPException
+# Tambahkan Form di sini untuk menerima teks manual
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -43,47 +44,62 @@ async def toggle_status(key: str):
 
 # ---------------------------------------------------------------------
 
+# Ubah parameter agar menerima file (foto) ATAU text (ketikan manual)
 @app.post("/solve")
-async def solve_problem(file: UploadFile = File(...)):
+async def solve_problem(file: UploadFile = File(None), text: str = Form(None)):
     if not app_active:
         return {"status": "error", "answer": "MAJER JHEK GRATISEN MELOLOH!."}
     try:
-        print("▶️ 1. Menerima foto dari HP...")
-        image_bytes = await file.read()
+        print("▶️ 1. Menerima request dari HP...")
         
-        print("▶️ 2. Membaca format gambar...")
-        mime_type = file.content_type
-
-        # Trik: Paksa jadi JPEG jika Flutter mengirim format anonim
-        if mime_type == "application/octet-stream" or not mime_type:
-            mime_type = "image/jpeg"
-        
-        print("▶️ 3. Menghubungi Google Gemini (Direct REST API)...")
-        prompt = (
-            "Identifikasi soal matematika/fisika/kimia di dalam foto ini. "
-            "Selesaikan soalnya dan berikan jawaban akhir beserta langkah-langkah "
-            "penyelesaiannya secara detail dan terstruktur."
+        # Cek jika tidak ada foto dan tidak ada teks yang dikirim
+        if not file and not text:
+             return {"status": "error", "answer": "Tolong kirimkan foto atau teks soal."}
+             
+        # Prompt dasar bahasa Madura yang tidak diubah
+        base_prompt = (
+            "Selesaikan soal ini dan berikan jawaban akhir beserta langkah-langkah "
+            "penyelesaiannya secara detail dan terstruktur. "
             "dan beri jawaban dalam bahasa Madura yang khas (dialek Madura standar), gunakan kosakata asli Madura dan hindari mencampuradukkannya dengan bahasa Jawa, meskipun ini konteksnya daerah Probolinggo."
         )
         
-        # Konversi gambar ke format Base64 yang diminta oleh Google
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        
+        parts = []
+
+        # LOGIKA 1: Jika user mengirim FOTO
+        if file:
+            print("▶️ 2. Membaca format gambar...")
+            image_bytes = await file.read()
+            mime_type = file.content_type
+
+            # Trik: Paksa jadi JPEG jika Flutter mengirim format anonim
+            if mime_type == "application/octet-stream" or not mime_type:
+                mime_type = "image/jpeg"
+            
+            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+            
+            # Gabungkan prompt foto dengan prompt Madura
+            parts.append({"text": "Identifikasi soal matematika/fisika/kimia di dalam foto ini. " + base_prompt})
+            parts.append({
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": image_b64
+                }
+            })
+            
+        # LOGIKA 2: Jika user mengirim TEKS MANUAL
+        else:
+            print(f"▶️ 2. Membaca input manual: {text}")
+            # Gabungkan teks ketikan user dengan prompt Madura
+            parts.append({"text": f"Pertanyaan: {text}\n\n" + base_prompt})
+            
+        print("▶️ 3. Menghubungi Google Gemini (Direct REST API)...")
         # Endpoint resmi Google
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
         
         # Merakit paket data untuk dikirim
         payload = {
             "contents": [{
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inline_data": {
-                            "mime_type": mime_type,
-                            "data": image_b64
-                        }
-                    }
-                ]
+                "parts": parts
             }]
         }
         
@@ -109,7 +125,7 @@ async def solve_problem(file: UploadFile = File(...)):
         
     except Exception as e:
         print(f"🔥 ERROR DETAIL: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Gagal memproses gambar: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal memproses request: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
