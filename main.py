@@ -30,6 +30,17 @@ if not API_KEY:
 # Status awal aplikasi (bisa diakses)
 app_active = True
 
+# =================================================================
+# FITUR PUSAT KOMANDO UPDATE APLIKASI
+# =================================================================
+@app.get("/check-update")
+async def check_update():
+    return {
+        "latest_version": "1.0.1",
+        "download_url": "https://drive.google.com/uc?export=download&id=1a2b3c4d5e6f7g8h9i0jKLMNOPQRSTUVWXYZ",
+        "update_message": "Sistem penyelesaian soal yang lebih canggih dan UI baru!"
+    }
+
 # Endpoint untuk mengunci/membuka aplikasi
 @app.get("/admin/toggle")
 async def toggle_status(key: str):
