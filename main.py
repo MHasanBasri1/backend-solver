@@ -36,7 +36,7 @@ app_active = True
 @app.get("/check-update")
 async def check_update():
     return {
-        "latest_version": "1.0.1",
+        "latest_version": "1.0.0",
         "download_url": "https://drive.google.com/uc?export=download&id=1a2b3c4d5e6f7g8h9i0jKLMNOPQRSTUVWXYZ",
         "update_message": "Sistem penyelesaian soal yang lebih canggih dan UI baru!"
     }
