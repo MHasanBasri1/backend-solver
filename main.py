@@ -38,8 +38,8 @@ app_maintenance = False
 async def check_update():
     global app_maintenance # Sekarang menggunakan variabel maintenance, bukan app_active
     return {
-        "latest_version": "1.0.0", 
-        "download_url": "https://drive.google.com/uc?export=download&id=CONTOH_ID_GOOGLE_DRIVE",
+        "latest_version": "1.0.1", 
+        "download_url": "https://id.pinterest.com/",
         "update_message": "Sistem penyelesaian soal yang lebih canggih dan UI baru!",
         "is_maintenance": app_maintenance # Jika True, pop-up muncul di HP user
     }
