@@ -29,16 +29,19 @@ if not API_KEY:
 
 # Status awal aplikasi (bisa diakses)
 app_active = True
+app_maintenance = False
 
 # =================================================================
 # FITUR PUSAT KOMANDO UPDATE APLIKASI
 # =================================================================
 @app.get("/check-update")
 async def check_update():
+    global app_maintenance # Sekarang menggunakan variabel maintenance, bukan app_active
     return {
-        "latest_version": "1.0.0",
-        "download_url": "https://drive.google.com/uc?export=download&id=1a2b3c4d5e6f7g8h9i0jKLMNOPQRSTUVWXYZ",
-        "update_message": "Sistem penyelesaian soal yang lebih canggih dan UI baru!"
+        "latest_version": "1.0.0", 
+        "download_url": "https://drive.google.com/uc?export=download&id=CONTOH_ID_GOOGLE_DRIVE",
+        "update_message": "Sistem penyelesaian soal yang lebih canggih dan UI baru!",
+        "is_maintenance": app_maintenance # Jika True, pop-up muncul di HP user
     }
 
 # Endpoint untuk mengunci/membuka aplikasi
@@ -53,6 +56,15 @@ async def toggle_status(key: str):
         return {"status": status_text}
     return {"error": "Akses Ditolak"}
 
+
+@app.get("/admin/toggle-maintenance")
+async def toggle_maintenance(key: str):
+    global app_maintenance
+    if key == "KUNCI_RAHASIA_123":
+        app_maintenance = not app_maintenance
+        status_text = "Mode Pemeliharaan NYALA" if app_maintenance else "Mode Pemeliharaan MATI"
+        return {"status": status_text}
+    return {"error": "Akses Ditolak"}
 # ---------------------------------------------------------------------
 
 # Ubah parameter agar menerima file (foto) ATAU text (ketikan manual)
