@@ -52,7 +52,7 @@ app_maintenance = False
 async def check_update():
     global app_maintenance 
     return {
-        "latest_version": "1.0.0", 
+        "latest_version": "1.0.1", 
         "download_url": "https://backend-solver-production.up.railway.app/static/SolverSains_v1.0.1.apk",
         "update_message": "Sistem penyelesaian soal yang lebih canggih, animasi sains baru, dan tombol copy!",
         "is_maintenance": app_maintenance 
