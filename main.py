@@ -85,6 +85,8 @@ async def solve_problem(
     text: str = Form(None),
     device_id: str = Form(None) 
 ):
+
+    print(f"DEBUGGING: KTP yang diterima server adalah: '{device_id}'")
     # 1. Cek Kunci Utama Aplikasi
     if not app_active:
         return {"status": "error", "answer": "MAJER JHEK GRATISEN MELOLOH!."}
