@@ -79,7 +79,7 @@ async def toggle_maintenance(key: str):
     return {"error": "Akses Ditolak"}
 
 # =================================================================
-# API BARU: MENARIK BERITA EKONOMI REAL-TIME (DENGAN CACHE 15 MENIT)
+# API BARU: MENARIK BERITA EKONOMI REAL-TIME (ROBUST/ANTI-CRASH)
 # =================================================================
 @app.get("/api/news")
 async def get_financial_news():
@@ -90,35 +90,39 @@ async def get_financial_news():
     if not news_cache["data"] or (current_time - news_cache["timestamp"] > 900):
         print("🔄 Menarik berita baru dari Yahoo Finance...")
         try:
-            tickers = yf.Tickers('BTC-USD SOL-USD EURUSD=X ^JKSE')
+            # Ganti IHSG dengan aset kripto/saham global agar lebih stabil
+            tickers = yf.Tickers('BTC-USD SOL-USD AAPL') 
             news_list = []
             
             for symbol, ticker in tickers.tickers.items():
-                if hasattr(ticker, 'news') and ticker.news:
-                    for item in ticker.news[:2]:
-                        news_list.append({
-                            "title": item.get('title', 'Berita Tanpa Judul'),
-                            "publisher": item.get('publisher', 'Sumber Tidak Diketahui'),
-                            "link": item.get('link', ''),
-                            "related_asset": symbol
-                        })
+                try:
+                    if hasattr(ticker, 'news') and ticker.news:
+                        for item in ticker.news[:2]:
+                            news_list.append({
+                                "title": item.get('title', 'Berita Tanpa Judul'),
+                                "publisher": item.get('publisher', 'Sumber Tidak Diketahui'),
+                                "link": item.get('link', ''),
+                                "related_asset": symbol
+                            })
+                except Exception as inner_e:
+                    print(f"⚠️ Gagal menarik berita untuk {symbol}: {inner_e}")
+                    continue # Jika 1 aset gagal, lewati dan lanjut ke aset berikutnya
             
-            # Simpan ke cache
-            news_cache = {"data": news_list, "timestamp": current_time}
+            # Jika berhasil mendapat berita, simpan ke cache
+            if news_list:
+                news_cache = {"data": news_list, "timestamp": current_time}
             
         except Exception as e:
-            print(f"⚠️ Gagal menarik berita asli, error: {e}")
-            if news_cache["data"]: 
-                print("⚡ Menggunakan data cache lama karena server berita error.")
-            else:
-                raise HTTPException(status_code=500, detail="Gagal menarik berita.")
+            print(f"⚠️ Gagal total menarik berita: {e}")
+            
     else:
         print("⚡ Membaca berita langsung dari memori Cache (Super Cepat!)")
 
+    # Jika news_list kosong tapi cache ada data lama, akan mengembalikan cache lama
     return {"status": "success", "data": news_cache["data"]}
 
 # =================================================================
-# API BARU: REKOMENDASI (SINYAL) DARI GEMINI (DENGAN CACHE 10 MENIT)
+# API BARU: REKOMENDASI (SINYAL) DARI GEMINI (ROBUST/ANTI-CRASH)
 # =================================================================
 @app.get("/api/signals")
 async def get_trading_signals():
@@ -129,51 +133,53 @@ async def get_trading_signals():
     if not signals_cache["data"] or (current_time - signals_cache["timestamp"] > 600):
         print("🔄 Menganalisis sinyal pasar terbaru dengan Gemini...")
         try:
-            assets = ['BTC-USD', 'SOL-USD', '^JKSE'] # Bitcoin, Solana, IHSG
+            assets = ['BTC-USD', 'SOL-USD']
             signals = []
 
             for asset in assets:
-                ticker = yf.Ticker(asset)
-                hist = ticker.history(period="1d")
-                if hist.empty:
-                    continue
+                try:
+                    ticker = yf.Ticker(asset)
+                    hist = ticker.history(period="1d")
+                    if hist.empty:
+                        continue
+                        
+                    current_price = hist['Close'].iloc[-1]
                     
-                current_price = hist['Close'].iloc[-1]
+                    # Minta insting analisis singkat ke Gemini
+                    prompt = (
+                        f"Kamu adalah Analis Trading Profesional. Harga {asset} saat ini adalah {current_price}. "
+                        "Berikan 1 paragraf analisis singkat tentang prospeknya hari ini, dan berikan SATU KATA keputusan akhir di awal kalimat: [BELI], [JUAL], atau [TAHAN]."
+                    )
+                    
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
+                    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+                    gemini_response = requests.post(url, headers={'Content-Type': 'application/json'}, json=payload).json()
+                    
+                    analysis = gemini_response['candidates'][0]['content']['parts'][0]['text']
+                    
+                    signals.append({
+                        "asset": asset,
+                        "price": round(current_price, 2),
+                        "ai_analysis": analysis
+                    })
+                except Exception as inner_e:
+                    print(f"⚠️ Gagal memanggil AI untuk {asset}: {inner_e}")
+                    continue # Jika 1 gagal, lanjut ke yang lain
                 
-                # Minta insting analisis singkat ke Gemini
-                prompt = (
-                    f"Kamu adalah Analis Trading Profesional. Harga {asset} saat ini adalah {current_price}. "
-                    "Berikan 1 paragraf analisis singkat tentang prospeknya hari ini berdasarkan fundamental/teknikal umum, dan berikan SATU KATA keputusan akhir di awal kalimat: [BELI], [JUAL], atau [TAHAN]."
-                )
-                
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
-                payload = {"contents": [{"parts": [{"text": prompt}]}]}
-                gemini_response = requests.post(url, headers={'Content-Type': 'application/json'}, json=payload).json()
-                
-                analysis = gemini_response['candidates'][0]['content']['parts'][0]['text']
-                
-                signals.append({
-                    "asset": asset,
-                    "price": round(current_price, 2),
-                    "ai_analysis": analysis
-                })
-                
-            # Simpan ke cache
-            signals_cache = {"data": signals, "timestamp": current_time}
+            # Simpan ke cache jika ada hasilnya
+            if signals:
+                signals_cache = {"data": signals, "timestamp": current_time}
             
         except Exception as e:
-            print(f"⚠️ Gagal memanggil AI, error: {e}")
-            if signals_cache["data"]:
-                print("⚡ Menggunakan sinyal cache lama.")
-            else:
-                raise HTTPException(status_code=500, detail="Gagal menganalisis pasar.")
+            print(f"⚠️ Gagal total menganalisis pasar: {e}")
+            
     else:
         print("⚡ Membaca sinyal AI langsung dari memori Cache!")
 
     return {"status": "success", "data": signals_cache["data"]}
 
 # =================================================================
-# FUNGSI CHAT AI (TANYA JAWAB LANGSUNG)
+# FUNGSI CHAT AI (SOLVER EKONOMI)
 # =================================================================
 @app.post("/solve")
 async def solve_problem(
@@ -185,7 +191,7 @@ async def solve_problem(
     if not app_active:
         return {"status": "error", "answer": "Sistem Market sedang dikunci oleh admin."}
 
-    # SATPAM SUPABASE
+    # SATPAM SUPABASE: Cek apakah KTP ini ada di daftar hitam
     if device_id and supabase:
         print(f"▶️ Mengecek status blokir untuk HP: {device_id}")
         response = supabase.table("banned_devices").select("*").eq("device_id", device_id).execute()
@@ -193,6 +199,7 @@ async def solve_problem(
         if len(response.data) > 0:
              return {"status": "banned", "answer": "Akses Anda telah diblokir secara permanen."}
              
+        # BUKU TAMU SUPABASE: Catat KTP jika belum pernah dicatat
         try:
             log_check = supabase.table("users_log").select("device_id").eq("device_id", device_id).execute()
             if len(log_check.data) == 0: 
