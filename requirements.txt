@@ -5,3 +5,4 @@ google-generativeai>=0.5.0
 pillow>=10.0.0
 python-dotenv>=1.0.0
 supabase
+yfinance==0.2.37
