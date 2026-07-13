@@ -79,7 +79,7 @@ async def toggle_maintenance(key: str):
     return {"error": "Akses Ditolak"}
 
 # =================================================================
-# API: BERITA MULTI-SOURCE RSS DENGAN DETEKSI GAMBAR (IMAGE)
+# API: BERITA MULTI-SOURCE RSS (CNBC, KONTAN, COINDESK, CRYPTO WAVE)
 # =================================================================
 @app.get("/api/news")
 async def get_financial_news():
@@ -90,10 +90,12 @@ async def get_financial_news():
         print("🔄 Menarik berita baru dari Multi-Source RSS...")
         news_list = []
         
+        # Penambahan sumber pipa berita baru: Crypto Wave
         rss_feeds = {
             "CNBC Indonesia": "https://www.cnbcindonesia.com/market/rss",
             "Kontan": "https://www.kontan.co.id/rss",
-            "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/"
+            "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+            "Crypto Wave": "https://cryptowave.co.id/category/breaking-news/feed/"
         }
         
         headers = {
@@ -111,25 +113,21 @@ async def get_financial_news():
                         title = item.find('title')
                         link = item.find('link')
                         
-                        # --- FITUR BARU: MENGAMBIL GAMBAR DARI RSS ---
                         image_url = ""
-                        # Coba metode tag <media:content>
                         media_content = item.find('.//{http://search.yahoo.com/mrss/}content')
                         if media_content is not None and 'url' in media_content.attrib:
                             image_url = media_content.attrib['url']
                         else:
-                            # Coba metode tag <enclosure>
                             enclosure = item.find('enclosure')
                             if enclosure is not None and 'url' in enclosure.attrib:
                                 image_url = enclosure.attrib['url']
-                        # ---------------------------------------------
                         
                         title_text = title.text if title is not None else "Berita Pasar Terbaru"
                         link_text = link.text if link is not None else "https://finance.yahoo.com"
                         
                         related = "Pasar Global"
                         title_lower = title_text.lower()
-                        if "bitcoin" in title_lower or "btc" in title_lower or "kripto" in title_lower:
+                        if "bitcoin" in title_lower or "btc" in title_lower or "kripto" in title_lower or "crypto" in title_lower:
                             related = "BTC-USD"
                         elif "solana" in title_lower or "sol" in title_lower:
                             related = "SOL-USD"
@@ -143,7 +141,7 @@ async def get_financial_news():
                             "publisher": provider,
                             "link": link_text.strip(),
                             "related_asset": related,
-                            "image_url": image_url # Gambar dikirim ke Flutter
+                            "image_url": image_url
                         })
             except Exception as e:
                 print(f"⚠️ Gagal mengambil berita dari {provider}: {e}")
@@ -171,7 +169,6 @@ async def get_trading_signals():
         print("🔄 Mengolah sinyal pasar baru dengan Dukungan Multi-Mata Uang...")
         signals = []
         
-        # 1. AMBIL KURS RUPIAH LIVE (USD TO IDR)
         usd_to_idr = 16350.0  
         try:
             url_rate = "https://api.binance.com/api/v3/ticker/price?symbol=USDTBIDR"
@@ -182,11 +179,11 @@ async def get_trading_signals():
             try:
                 url_cg_rate = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=idr"
                 cg_rate_res = requests.get(url_cg_rate, timeout=4).json()
-                usd_to_idr = float(cg_rate_res['tether']['idr'])
-            except Exception as rate_err:
+                if 'tether' in cg_rate_res:
+                    usd_to_idr = float(cg_rate_res['tether']['idr'])
+            except:
                 pass
 
-        # 2. DAFTAR ASET (SUDAH DITAMBAH ETHEREUM)
         crypto_assets = {
             "Bitcoin (BTC)": {"binance": "BTCUSDT", "cg_id": "bitcoin", "base_price": 64850.0},
             "Ethereum (ETH)": {"binance": "ETHUSDT", "cg_id": "ethereum", "base_price": 3450.0},
@@ -221,7 +218,6 @@ async def get_trading_signals():
             idr_formatted = f"Rp {int(current_price_idr):,}".replace(",", ".")
             usd_formatted = f"${current_price_usd:,.2f}"
 
-            # 3. PROSES ANALISIS GEMINI DENGAN DUET DOLAR & RUPIAH
             analysis_text = ""
             try:
                 prompt = (
@@ -299,7 +295,8 @@ async def solve_problem(
         parts = [{"text": f"Pertanyaan: {text}\n\n" + base_prompt}]
             
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
-        payload = {"contents": [{"parts": parts}]}
+        payload = {"contents": [{"parts": dict(parts[0]) if isinstance(parts[0], dict) else parts[0]}]}
+        payload = {"contents": [{"parts": [{"text": f"Pertanyaan: {text}\n\n" + base_prompt}]}]}
         headers = {'Content-Type': 'application/json'}
         gemini_response = requests.post(url, headers=headers, json=payload)
         
