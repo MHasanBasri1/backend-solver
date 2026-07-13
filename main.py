@@ -79,7 +79,7 @@ async def toggle_maintenance(key: str):
     return {"error": "Akses Ditolak"}
 
 # =================================================================
-# API: BERITA MULTI-SOURCE RSS (CNBC, KONTAN, COINDESK)
+# API: BERITA MULTI-SOURCE RSS DENGAN DETEKSI GAMBAR (IMAGE)
 # =================================================================
 @app.get("/api/news")
 async def get_financial_news():
@@ -111,6 +111,19 @@ async def get_financial_news():
                         title = item.find('title')
                         link = item.find('link')
                         
+                        # --- FITUR BARU: MENGAMBIL GAMBAR DARI RSS ---
+                        image_url = ""
+                        # Coba metode tag <media:content>
+                        media_content = item.find('.//{http://search.yahoo.com/mrss/}content')
+                        if media_content is not None and 'url' in media_content.attrib:
+                            image_url = media_content.attrib['url']
+                        else:
+                            # Coba metode tag <enclosure>
+                            enclosure = item.find('enclosure')
+                            if enclosure is not None and 'url' in enclosure.attrib:
+                                image_url = enclosure.attrib['url']
+                        # ---------------------------------------------
+                        
                         title_text = title.text if title is not None else "Berita Pasar Terbaru"
                         link_text = link.text if link is not None else "https://finance.yahoo.com"
                         
@@ -129,7 +142,8 @@ async def get_financial_news():
                             "title": title_text.strip(),
                             "publisher": provider,
                             "link": link_text.strip(),
-                            "related_asset": related
+                            "related_asset": related,
+                            "image_url": image_url # Gambar dikirim ke Flutter
                         })
             except Exception as e:
                 print(f"⚠️ Gagal mengambil berita dari {provider}: {e}")
@@ -138,7 +152,7 @@ async def get_financial_news():
         if news_list:
             news_cache = {"data": news_list, "timestamp": current_time}
         else:
-            news_cache["data"] = [{"title": "Pasar Keuangan Bergerak Stabil Pagi Ini", "publisher": "CNBC Indonesia", "link": "https://www.cnbcindonesia.com", "related_asset": "Pasar Global"}]
+            news_cache["data"] = [{"title": "Pasar Keuangan Bergerak Stabil Pagi Ini", "publisher": "CNBC Indonesia", "link": "https://www.cnbcindonesia.com", "related_asset": "Pasar Global", "image_url": ""}]
             
     else:
         print("⚡ Membaca berita langsung dari memori Cache!")
@@ -158,20 +172,19 @@ async def get_trading_signals():
         signals = []
         
         # 1. AMBIL KURS RUPIAH LIVE (USD TO IDR)
-        usd_to_idr = 16350.0  # Angka cadangan jika internet bursa putus
+        usd_to_idr = 16350.0  
         try:
             url_rate = "https://api.binance.com/api/v3/ticker/price?symbol=USDTBIDR"
             rate_res = requests.get(url_rate, timeout=4).json()
             if 'price' in rate_res:
                 usd_to_idr = float(rate_res['price'])
-                print(f"💵 Kurs Live Dollar ke Rupiah saat ini: Rp {usd_to_idr:,.2f}")
         except:
             try:
                 url_cg_rate = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=idr"
                 cg_rate_res = requests.get(url_cg_rate, timeout=4).json()
                 usd_to_idr = float(cg_rate_res['tether']['idr'])
             except Exception as rate_err:
-                print(f"⚠️ Gagal mengambil kurs live, menggunakan kurs standar: {rate_err}")
+                pass
 
         # 2. DAFTAR ASET (SUDAH DITAMBAH ETHEREUM)
         crypto_assets = {
@@ -184,7 +197,6 @@ async def get_trading_signals():
             current_price_usd = info["base_price"]
             price_fetched = False
             
-            # Ambil Harga Live Jalur 1 (Binance)
             try:
                 url_price = f"https://api.binance.com/api/v3/ticker/price?symbol={info['binance']}"
                 res = requests.get(url_price, timeout=4)
@@ -193,23 +205,19 @@ async def get_trading_signals():
                     if 'price' in price_data:
                         current_price_usd = float(price_data['price'])
                         price_fetched = True
-            except Exception as e:
-                print(f"⚠️ Binance offline untuk {display_name}: {e}")
+            except:
+                pass
 
-            # Ambil Harga Live Jalur 2 (CoinGecko) jika Binance diblokir
             if not price_fetched:
                 try:
                     url_cg = f"https://api.coingecko.com/api/v3/simple/price?ids={info['cg_id']}&vs_currencies=usd"
                     cg_res = requests.get(url_cg, timeout=4).json()
                     current_price_usd = float(cg_res[info['cg_id']]['usd'])
                     price_fetched = True
-                except Exception as e:
-                    print(f"⚠️ CoinGecko offline: {e}. Menggunakan harga dasar.")
+                except:
+                    pass
 
-            # KONTROL KONVERSI MATA UANG
             current_price_idr = current_price_usd * usd_to_idr
-            
-            # Format teks rupiah agar rapi (Contoh: Rp 1.050.230.000)
             idr_formatted = f"Rp {int(current_price_idr):,}".replace(",", ".")
             usd_formatted = f"${current_price_usd:,.2f}"
 
@@ -230,8 +238,6 @@ async def get_trading_signals():
                 else:
                     raise Exception("Limit AI")
             except Exception as e:
-                print(f"⚠️ Jalur AI menggunakan analisis lokal cerdas: {e}")
-                # Generator Analisis Lokal jika Gemini sibuk (Sudah mendukung Dolar & Rupiah)
                 if "Bitcoin" in display_name:
                     analysis_text = f"[BELI] Harga Bitcoin bertahan kuat di kisaran {usd_formatted} ({idr_formatted}). Aset sedang membentuk pola akumulasi kuat di atas area support psikologis. Volume beli konstan membuka peluang besar untuk menguji zona resisten dalam 24 jam ke depan."
                 elif "Ethereum" in display_name:
@@ -239,13 +245,12 @@ async def get_trading_signals():
                 else:
                     analysis_text = f"[TAHAN] Solana bergerak stabil di level {usd_formatted} ({idr_formatted}). Grafik jangka pendek menunjukkan konsolidasi menyempit di dalam area symmetrical triangle. Disarankan menunggu konfirmasi pola breakout sebelum masuk posisi."
 
-            # Kirim data super lengkap ke Flutter
             signals.append({
                 "asset": display_name,
-                "price": round(current_price_usd, 2),        # Data Dolar (Desimal)
-                "price_usd_text": usd_formatted,             # Teks Dolar Rapi ($64,000.00)
-                "price_idr_text": idr_formatted,             # Teks Rupiah Rapi (Rp 1.050.000.000)
-                "price_idr_raw": round(current_price_idr, 0),# Angka Rupiah Murni (Untuk Kalkulasi di Flutter jika butuh)
+                "price": round(current_price_usd, 2),        
+                "price_usd_text": usd_formatted,             
+                "price_idr_text": idr_formatted,             
+                "price_idr_raw": round(current_price_idr, 0),
                 "ai_analysis": analysis_text
             })
             
