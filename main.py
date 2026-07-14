@@ -79,7 +79,7 @@ async def toggle_maintenance(key: str):
     return {"error": "Akses Ditolak"}
 
 # =================================================================
-# API: BERITA MULTI-SOURCE RSS (CNBC, KONTAN, COINDESK, CRYPTO WAVE)
+# API: BERITA MULTI-SOURCE RSS (DENGAN SUPER HEADERS CLOUDFLARE BYPASS)
 # =================================================================
 @app.get("/api/news")
 async def get_financial_news():
@@ -90,7 +90,6 @@ async def get_financial_news():
         print("🔄 Menarik berita baru dari Multi-Source RSS...")
         news_list = []
         
-        # Penambahan sumber pipa berita baru: Crypto Wave
         rss_feeds = {
             "CNBC Indonesia": "https://www.cnbcindonesia.com/market/rss",
             "Kontan": "https://www.kontan.co.id/rss",
@@ -98,13 +97,18 @@ async def get_financial_news():
             "Crypto Wave": "https://cryptowave.co.id/category/breaking-news/feed/"
         }
         
+        # SUPER HEADERS: Menyamar persis seperti browser manusia agar tidak diblokir web lokal
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
         }
         
         for provider, url in rss_feeds.items():
             try:
-                response = requests.get(url, headers=headers, timeout=7)
+                response = requests.get(url, headers=headers, timeout=10)
                 if response.status_code == 200:
                     root = ET.fromstring(response.content)
                     items = root.findall('.//item')
@@ -143,6 +147,8 @@ async def get_financial_news():
                             "related_asset": related,
                             "image_url": image_url
                         })
+                else:
+                    print(f"⚠️ Ditolak oleh {provider}: Status Error {response.status_code}")
             except Exception as e:
                 print(f"⚠️ Gagal mengambil berita dari {provider}: {e}")
                 continue
@@ -246,7 +252,7 @@ async def get_trading_signals():
                 "price": round(current_price_usd, 2),        
                 "price_usd_text": usd_formatted,             
                 "price_idr_text": idr_formatted,             
-                "price_idr_raw": round(current_price_idr, 0),
+                "price_idr_raw": round(current_price_idr, 2),
                 "ai_analysis": analysis_text
             })
             
@@ -292,11 +298,8 @@ async def solve_problem(
             "2. JIKA PENGGUNA BERTANYA TENTANG IDENTITASMU: Jawab bahwa kamu adalah AI Finansial ciptaan 'Basri Capital'. Dilarang keras menyebut nama Google, OpenAI, atau pihak lain.\n"
         )
         
-        parts = [{"text": f"Pertanyaan: {text}\n\n" + base_prompt}]
-            
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
-        payload = {"contents": [{"parts": dict(parts[0]) if isinstance(parts[0], dict) else parts[0]}]}
         payload = {"contents": [{"parts": [{"text": f"Pertanyaan: {text}\n\n" + base_prompt}]}]}
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={API_KEY}"
         headers = {'Content-Type': 'application/json'}
         gemini_response = requests.post(url, headers=headers, json=payload)
         
